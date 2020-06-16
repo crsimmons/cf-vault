@@ -1,21 +1,14 @@
 #!/bin/sh
 
-CLEARDB=`echo $VCAP_SERVICES | grep "cleardb"`
-PMYSQL=`echo $VCAP_SERVICES | grep "p-mysql"`
-
-if [ "$CLEARDB" != "" ];then
-	SERVICE="cleardb"
-elif [ "$PMYSQL" != "" ]; then
-	SERVICE="p-mysql"
-fi
-
-echo "detected $SERVICE"
+SERVICE="p.mysql"
 
 HOSTNAME=`echo $VCAP_SERVICES | jq -r '.["'$SERVICE'"][0].credentials.hostname'`
 PASSWORD=`echo $VCAP_SERVICES | jq -r '.["'$SERVICE'"][0].credentials.password'`
 PORT=`echo $VCAP_SERVICES | jq -r '.["'$SERVICE'"][0].credentials.port'`
 USERNAME=`echo $VCAP_SERVICES | jq -r '.["'$SERVICE'"][0].credentials.username'`
 DATABASE=`echo $VCAP_SERVICES | jq -r '.["'$SERVICE'"][0].credentials.name'`
+
+APP_URI=$(echo $VCAP_APPLICATION | jq -r '.application_uris[0]')
 
 cat <<EOF > cf.hcl
 ui = true
@@ -26,13 +19,16 @@ storage "mysql" {
   address = "$HOSTNAME:$PORT"
   database = "$DATABASE"
   table = "vault"
-  max_parallel = 4
+  max_parallel = "128"
 }
 listener "tcp" {
  address = "0.0.0.0:8080"
  tls_disable = 1
 }
+api_addr = "https://${APP_URI}:443"
 EOF
+
+cat cf.hcl
 
 echo "#### Starting Vault..."
 
